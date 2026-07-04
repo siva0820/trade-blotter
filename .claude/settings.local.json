@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill -f \"vite\")",
+      "Bash(pkill -f \"esbuild\")",
+      "Bash(rm -rf \"/c/Users/sivan/trade-blotter/dist\")"
+    ]
+  }
+}
