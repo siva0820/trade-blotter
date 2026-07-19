@@ -1,5 +1,5 @@
 const STATUS_STYLES = {
-  FILLED: { bg: '#e6f4ea', fg: '#1b7a3d' },
+  EXECUTED: { bg: '#e6f4ea', fg: '#1b7a3d' },
   PARTIAL: { bg: '#fdf3e0', fg: '#b8860b' },
   PENDING: { bg: '#e3f0fc', fg: '#1565c0' },
   CANCELLED: { bg: '#eee', fg: '#757575' },
@@ -31,7 +31,7 @@ export function StatusBadgeCellRenderer({ value }) {
 }
 
 export function FilledQtyCellRenderer({ data }) {
-  const percent = data.quantity > 0 ? Math.round((data.filledQuantity / data.quantity) * 100) : 0
+  const percent = data.qty > 0 ? Math.round((data.filledQty / data.qty) * 100) : 0
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2, height: '100%' }}>
       <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#e0e0e0', overflow: 'hidden' }}>
@@ -45,7 +45,7 @@ export function FilledQtyCellRenderer({ data }) {
         />
       </div>
       <span style={{ fontSize: 10, color: '#555', minWidth: 40, textAlign: 'right' }}>
-        {data.filledQuantity.toLocaleString()} / {data.quantity.toLocaleString()}
+        {data.filledQty.toLocaleString()} / {data.qty.toLocaleString()}
       </span>
     </div>
   )
@@ -64,7 +64,7 @@ const buttonStyle = (color, disabled) => ({
 })
 
 export function ActionsCellRenderer({ data, onExecute, onCancel, onEdit }) {
-  const disabled = data.status !== 'PENDING'
+  const disabled = data.status === 'EXECUTED' || data.status === 'CANCELLED'
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', height: '100%' }}>
       <button

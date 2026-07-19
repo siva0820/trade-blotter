@@ -1,7 +1,7 @@
 import { Box, Card, CardContent, Chip, Stack, Typography } from '@mui/material'
 
 const statusColor = {
-  FILLED: 'success',
+  EXECUTED: 'success',
   PARTIAL: 'warning',
   PENDING: 'info',
   CANCELLED: 'default',
@@ -26,13 +26,10 @@ function TradeDetailPanel({ trade }) {
         <Stack spacing={1}>
           <Typography>Trade ID: {trade.id}</Typography>
           <Typography>Side: {trade.side}</Typography>
-          <Typography>Quantity: {trade.quantity.toLocaleString()}</Typography>
-          <Typography>Filled: {trade.filledQuantity.toLocaleString()}</Typography>
+          <Typography>Quantity: {trade.qty.toLocaleString()}</Typography>
+          <Typography>Filled: {trade.filledQty.toLocaleString()}</Typography>
           <Typography>
             Price: {trade.price.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-          </Typography>
-          <Typography>
-            P&L: {trade.pnl.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
           </Typography>
           <Typography>Order Type: {trade.orderType}</Typography>
           <Typography>Trader: {trade.trader}</Typography>

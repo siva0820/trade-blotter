@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
+  Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -16,9 +18,11 @@ import {
 import { AgGridReact } from 'ag-grid-react'
 import { themeQuartz } from 'ag-grid-community'
 import './agGridSetup'
+import * as tradeService from '../../services/tradeService'
 import {
-  fetchTrades,
+  fetchTradesThunk,
   selectTrades,
+  selectTradesError,
   selectTradesStatus,
   tradeCancelled,
   tradeExecuted,
@@ -47,15 +51,14 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
   const dispatch = useDispatch()
   const trades = useSelector(selectTrades)
   const status = useSelector(selectTradesStatus)
+  const error = useSelector(selectTradesError)
   const [traderFilter, setTraderFilter] = useState('ALL')
   const [editingTrade, setEditingTrade] = useState(null)
-  const [editForm, setEditForm] = useState({ quantity: '', price: '' })
+  const [editForm, setEditForm] = useState({ qty: '', price: '' })
 
   useEffect(() => {
-    if (status === 'idle') {
-      dispatch(fetchTrades())
-    }
-  }, [status, dispatch])
+    dispatch(fetchTradesThunk())
+  }, [dispatch])
 
   const traders = useMemo(
     () => [...new Set(trades.map((trade) => trade.trader))].sort(),
@@ -67,43 +70,48 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
     [trades, traderFilter],
   )
 
-  const handleExecute = (trade) => {
-    dispatch(
-      tradeExecuted({
-        id: trade.id,
-        price: trade.price,
-        pnl: trade.pnl,
-        updatedAt: new Date().toISOString(),
-      }),
-    )
+  const handleExecute = async (trade) => {
+    try {
+      const updated = await tradeService.executeTrade(trade.id)
+      dispatch(tradeExecuted(updated))
+    } catch (err) {
+      console.error('[TradeBlotter] execute failed', err)
+    }
   }
 
-  const handleCancel = (trade) => {
-    dispatch(tradeCancelled({ id: trade.id, updatedAt: new Date().toISOString() }))
+  const handleCancel = async (trade) => {
+    try {
+      const updated = await tradeService.cancelTrade(trade.id)
+      dispatch(tradeCancelled(updated))
+    } catch (err) {
+      console.error('[TradeBlotter] cancel failed', err)
+    }
   }
 
   const handleEdit = (trade) => {
     setEditingTrade(trade)
-    setEditForm({ quantity: trade.quantity, price: trade.price })
+    setEditForm({ qty: trade.qty, price: trade.price })
   }
 
-  const handleEditSave = () => {
-    dispatch(
-      tradeUpdated({
-        id: editingTrade.id,
-        quantity: Number(editForm.quantity),
+  const handleEditSave = async () => {
+    try {
+      const updated = await tradeService.updateTrade(editingTrade.id, {
+        qty: Number(editForm.qty),
         price: Number(editForm.price),
-        updatedAt: new Date().toISOString(),
-      }),
-    )
-    setEditingTrade(null)
+      })
+      dispatch(tradeUpdated(updated))
+    } catch (err) {
+      console.error('[TradeBlotter] update failed', err)
+    } finally {
+      setEditingTrade(null)
+    }
   }
 
   const columnDefs = useMemo(
     () => [
       { field: 'symbol', headerName: 'Symbol', width: 85 },
       { field: 'side', headerName: 'Side', width: 60, cellRenderer: SideCellRenderer },
-            {
+      {
         field: 'status',
         headerName: 'Status',
         width: 100,
@@ -123,9 +131,9 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
         },
       },
       { field: 'trader', headerName: 'Trader', width: 70 },
-      { field: 'quantity', headerName: 'Qty', width: 60, type: 'numericColumn' },
+      { field: 'qty', headerName: 'Qty', width: 60, type: 'numericColumn' },
       {
-        field: 'filledQuantity',
+        field: 'filledQty',
         headerName: 'Filled Qty',
         width: 130,
         cellRenderer: FilledQtyCellRenderer,
@@ -142,7 +150,7 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
         headerName: 'Notional',
         width: 110,
         type: 'numericColumn',
-        valueGetter: (params) => params.data.quantity * params.data.price,
+        valueGetter: (params) => params.data.qty * params.data.price,
         valueFormatter: currencyFormatter,
       },
       { field: 'orderType', headerName: 'Order Type', width: 95 },
@@ -183,19 +191,26 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
       </FormControl>
 
       <Box sx={{ flex: 1, minHeight: 0 }}>
-        <AgGridReact
-          theme={compactTheme}
-          rowData={rowData}
-          columnDefs={columnDefs}
-          defaultColDef={defaultColDef}
-          loading={status === 'loading'}
-          getRowId={(params) => params.data.id}
-          onRowClicked={(event) => onSelectTrade(event.data.id)}
-          rowSelection="single"
-          getRowStyle={(params) =>
-            params.data.id === selectedId ? { background: '#e3f2fd' } : undefined
-          }
-        />
+        {status === 'loading' ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 8 }}>
+            <CircularProgress />
+          </Box>
+        ) : status === 'failed' ? (
+          <Alert severity="error">Failed to load trades: {error}</Alert>
+        ) : (
+          <AgGridReact
+            theme={compactTheme}
+            rowData={rowData}
+            columnDefs={columnDefs}
+            defaultColDef={defaultColDef}
+            getRowId={(params) => String(params.data.id)}
+            onRowClicked={(event) => onSelectTrade(event.data.id)}
+            rowSelection="single"
+            getRowStyle={(params) =>
+              params.data.id === selectedId ? { background: '#e3f2fd' } : undefined
+            }
+          />
+        )}
       </Box>
 
       <Dialog open={Boolean(editingTrade)} onClose={() => setEditingTrade(null)}>
@@ -204,8 +219,8 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
           <TextField
             label="Quantity"
             type="number"
-            value={editForm.quantity}
-            onChange={(event) => setEditForm((form) => ({ ...form, quantity: event.target.value }))}
+            value={editForm.qty}
+            onChange={(event) => setEditForm((form) => ({ ...form, qty: event.target.value }))}
           />
           <TextField
             label="Price"
