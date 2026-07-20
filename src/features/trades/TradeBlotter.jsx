@@ -192,8 +192,14 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
 
       <Box sx={{ flex: 1, minHeight: 0 }}>
         {status === 'loading' ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 8 }}>
-            <CircularProgress />
+          <Box>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Connecting to live API — server may take up to 60s to wake on first load (Render
+              free tier). Subsequent requests are instant.
+            </Alert>
+            <Box sx={{ display: 'flex', justifyContent: 'center', pt: 4 }}>
+              <CircularProgress />
+            </Box>
           </Box>
         ) : status === 'failed' ? (
           <Alert severity="error">Failed to load trades: {error}</Alert>
