@@ -30,6 +30,7 @@ const tradesSlice = createSlice({
     items: [],
     status: 'idle',
     error: null,
+    connectionStatus: 'connecting',
     allocations: {
       tradeId: null,
       items: [],
@@ -43,6 +44,9 @@ const tradesSlice = createSlice({
     tradeExecuted: (state, action) => upsertTrade(state, action.payload),
     tradeCancelled: (state, action) => upsertTrade(state, action.payload),
     tradeUpdated: (state, action) => upsertTrade(state, action.payload),
+    connectionStatusChanged: (state, action) => {
+      state.connectionStatus = action.payload
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -76,8 +80,14 @@ const tradesSlice = createSlice({
   },
 })
 
-export const { tradeAdded, tradePartialFill, tradeExecuted, tradeCancelled, tradeUpdated } =
-  tradesSlice.actions
+export const {
+  tradeAdded,
+  tradePartialFill,
+  tradeExecuted,
+  tradeCancelled,
+  tradeUpdated,
+  connectionStatusChanged,
+} = tradesSlice.actions
 
 export const selectTrades = (state) => state.trades.items
 export const selectTradesStatus = (state) => state.trades.status
@@ -85,5 +95,6 @@ export const selectTradesError = (state) => state.trades.error
 export const selectTradeById = (id) => (state) =>
   state.trades.items.find((trade) => trade.id === id)
 export const selectAllocations = (state) => state.trades.allocations
+export const selectConnectionStatus = (state) => state.trades.connectionStatus
 
 export default tradesSlice.reducer

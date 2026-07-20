@@ -19,21 +19,21 @@ const statusColor = {
   CANCELLED: 'default',
 }
 
-function AllocationPanel({ tradeId }) {
+function AllocationPanel({ trade }) {
   const dispatch = useDispatch()
   const allocations = useSelector(selectAllocations)
+  const tradeId = trade?.id ?? null
+  const isMock = Boolean(trade?.isMock)
 
   useEffect(() => {
-    if (tradeId != null) {
+    if (tradeId != null && !isMock) {
       dispatch(fetchAllocationsThunk(tradeId))
     }
-  }, [tradeId, dispatch])
+  }, [tradeId, isMock, dispatch])
 
-  if (tradeId == null) {
+  if (!trade) {
     return null
   }
-
-  const isCurrent = allocations.tradeId === tradeId
 
   return (
     <Card>
@@ -42,17 +42,23 @@ function AllocationPanel({ tradeId }) {
           Allocations
         </Typography>
 
-        {isCurrent && allocations.status === 'loading' && (
+        {isMock && (
+          <Alert severity="info">
+            Allocations unavailable for simulated trades. Waiting for live connection...
+          </Alert>
+        )}
+
+        {!isMock && allocations.tradeId === tradeId && allocations.status === 'loading' && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
             <CircularProgress size={24} />
           </Box>
         )}
 
-        {isCurrent && allocations.status === 'failed' && (
+        {!isMock && allocations.tradeId === tradeId && allocations.status === 'failed' && (
           <Alert severity="error">Failed to load allocations: {allocations.error}</Alert>
         )}
 
-        {isCurrent && allocations.status === 'succeeded' && (
+        {!isMock && allocations.tradeId === tradeId && allocations.status === 'succeeded' && (
           <Stack spacing={1}>
             {allocations.items.length === 0 && (
               <Typography color="text.secondary">No allocations for this trade.</Typography>

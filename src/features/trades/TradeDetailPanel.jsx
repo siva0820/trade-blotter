@@ -21,7 +21,10 @@ function TradeDetailPanel({ trade }) {
       <CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
           <Typography variant="h5">{trade.symbol}</Typography>
-          <Chip label={trade.status} color={statusColor[trade.status] ?? 'default'} />
+          <Stack direction="row" spacing={1}>
+            {trade.isMock && <Chip label="Simulated" size="small" color="default" variant="outlined" />}
+            <Chip label={trade.status} color={statusColor[trade.status] ?? 'default'} />
+          </Stack>
         </Stack>
         <Stack spacing={1}>
           <Typography>Trade ID: {trade.id}</Typography>

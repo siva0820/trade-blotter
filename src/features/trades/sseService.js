@@ -1,7 +1,17 @@
 import { apiClient } from '../../services/tradeService'
-import { tradeAdded, tradePartialFill, tradeExecuted, tradeCancelled } from './tradesSlice'
+import {
+  tradeAdded,
+  tradePartialFill,
+  tradeExecuted,
+  tradeCancelled,
+  connectionStatusChanged,
+} from './tradesSlice'
 
 const STREAM_PATH = '/api/trades/stream'
+
+// Backoff schedule for reconnecting to the real backend: 5s, 10s, 20s, 40s, then
+// capped at 60s for every attempt after that.
+const RETRY_DELAYS_MS = [5000, 10000, 20000, 40000, 60000]
 
 const ACTION_FOR_EVENT = {
   TRADE_NEW: tradeAdded,
@@ -19,9 +29,9 @@ const nowIso = () => new Date().toISOString()
 
 let mockIdCounter = 1000
 
-// Fallback used when the real SSE connection errors out (backend down/unreachable):
-// simulates the same TRADE_NEW -> TRADE_PARTIAL_FILL* -> TRADE_EXECUTED|TRADE_CANCELLED
-// lifecycle the real backend emits, dispatching full trade objects on a timer.
+// Visible placeholder feed, only used when there's no backend URL configured at
+// all (local dev with no VITE_API_URL). Every trade it produces is flagged
+// `isMock: true` so the UI can make clear the data isn't real.
 function connectMockTradeStream(dispatch) {
   const openTrades = new Map()
 
@@ -43,6 +53,7 @@ function connectMockTradeStream(dispatch) {
         createdAt: nowIso(),
         updatedAt: nowIso(),
         allocations: [],
+        isMock: true,
       }
       openTrades.set(trade.id, trade)
       dispatch(tradeAdded(trade))
@@ -77,38 +88,77 @@ function connectMockTradeStream(dispatch) {
   return () => clearInterval(interval)
 }
 
-// Connects to the real backend first; if the connection errors (backend down/
-// unreachable), falls back to the mock setInterval simulation above.
+// Always tries the real backend first (and keeps retrying it with exponential
+// backoff on error) rather than giving up on it permanently. The mock feed is
+// only ever used as a placeholder when no backend URL is configured at all -
+// see connectTradeStream below.
 export function connectTradeStream(dispatch) {
   const clientId = crypto.randomUUID()
   const url = `${apiClient.defaults.baseURL}${STREAM_PATH}?clientId=${clientId}`
+  const backendConfigured = Boolean(import.meta.env.VITE_API_URL)
 
-  let stoppedMock = null
-  let fellBack = false
+  let eventSource = null
+  let retryTimer = null
+  let retryIndex = 0
+  let stopMock = null
+  let stopped = false
 
-  const eventSource = new EventSource(url)
-
-  eventSource.addEventListener('CONNECTED', () => {
-    console.log('[sseService] connected to real backend')
-  })
-
-  Object.entries(ACTION_FOR_EVENT).forEach(([eventName, actionCreator]) => {
-    eventSource.addEventListener(eventName, (event) => {
-      const payload = JSON.parse(event.data)
-      dispatch(actionCreator(payload.trade))
-    })
-  })
-
-  eventSource.onerror = () => {
-    if (fellBack) return
-    fellBack = true
-    eventSource.close()
+  function startMockIfAllowed() {
+    if (backendConfigured || stopMock) return
     console.log('[sseService] using mock feed')
-    stoppedMock = connectMockTradeStream(dispatch)
+    stopMock = connectMockTradeStream(dispatch)
+    dispatch(connectionStatusChanged('mock'))
   }
 
+  function stopMockIfRunning() {
+    if (!stopMock) return
+    stopMock()
+    stopMock = null
+  }
+
+  function scheduleReconnect() {
+    if (stopped) return
+    const delay = RETRY_DELAYS_MS[Math.min(retryIndex, RETRY_DELAYS_MS.length - 1)]
+    retryIndex += 1
+    if (!stopMock) dispatch(connectionStatusChanged('reconnecting'))
+    retryTimer = setTimeout(connect, delay)
+  }
+
+  function connect() {
+    if (stopped) return
+
+    eventSource = new EventSource(url)
+
+    eventSource.addEventListener('CONNECTED', () => {
+      retryIndex = 0
+      console.log('[sseService] connected to real backend')
+      stopMockIfRunning()
+      dispatch(connectionStatusChanged('live'))
+    })
+
+    Object.entries(ACTION_FOR_EVENT).forEach(([eventName, actionCreator]) => {
+      eventSource.addEventListener(eventName, (event) => {
+        const payload = JSON.parse(event.data)
+        dispatch(actionCreator(payload.trade))
+      })
+    })
+
+    eventSource.onerror = () => {
+      if (stopped) return
+      eventSource.close()
+      startMockIfAllowed()
+      scheduleReconnect()
+    }
+  }
+
+  dispatch(connectionStatusChanged(backendConfigured ? 'connecting' : 'mock'))
+  startMockIfAllowed()
+  connect()
+
   return () => {
-    eventSource.close()
-    if (stoppedMock) stoppedMock()
+    stopped = true
+    if (eventSource) eventSource.close()
+    if (retryTimer) clearTimeout(retryTimer)
+    stopMockIfRunning()
   }
 }

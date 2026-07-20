@@ -191,7 +191,7 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
       </FormControl>
 
       <Box sx={{ flex: 1, minHeight: 0 }}>
-        {status === 'loading' ? (
+        {status === 'loading' && trades.length === 0 ? (
           <Box>
             <Alert severity="info" sx={{ mb: 2 }}>
               Connecting to live API — server may take up to 60s to wake on first load (Render
@@ -201,7 +201,7 @@ function TradeBlotter({ selectedId, onSelectTrade }) {
               <CircularProgress />
             </Box>
           </Box>
-        ) : status === 'failed' ? (
+        ) : status === 'failed' && trades.length === 0 ? (
           <Alert severity="error">Failed to load trades: {error}</Alert>
         ) : (
           <AgGridReact
